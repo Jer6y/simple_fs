@@ -8,3 +8,9 @@ void assert_fail(char * file,int line)
     perror("assert fail!\n");
     while(1);
 }
+void panic(char *name)
+{
+    printf("\n===panic====\n");
+    printf("==why:%s==\n",name);
+    while(1);
+}
