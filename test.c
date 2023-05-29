@@ -6,10 +6,13 @@
 #define MAX_CMDBUF_SIZE 1024
 #define MAX_WRITE_SIZE 4096
 #define MAX_FILENAME_SIZE 32
+#define MAX_FZ  1024
 extern FD_Room Entry_Root;
 char cmd_buf[MAX_CMDBUF_SIZE+1] ={0};
 char write_buf[MAX_WRITE_SIZE+1] ={0};
 int bsize =0;
+char t_buf[MAX_FZ+1] ={0};
+int t_last = MAX_FZ;
 //分析命令行缓冲区
 //具体描述:
 // 参数:
@@ -29,6 +32,7 @@ int bsize =0;
 // 11  -->  rmlink
 int analyze_cmd(char *file,size_t* size,int max_size)
 {
+    
     char instruction[MAX_CMDBUF_SIZE+1] ={0};
     int i=0,left=0,right=0;
     while(i<MAX_CMDBUF_SIZE && cmd_buf[i]!=' ' && cmd_buf[i]!= '\0') i++;
@@ -219,11 +223,25 @@ int analyze_cmd(char *file,size_t* size,int max_size)
     }
     return -1;
 }
+
+int loga()
+{
+    char c=0;
+    char user_name[10] ={0};
+    char passwd[20] ={0};
+    return 1;
+}
 int main(void)
 {
     sfs_system_init();
+    sfs_system_info();
     while(1)
     {
+        if(!loga()) 
+        {
+            printf("输入密码错误!\n");
+            continue;
+        }
         size_t size =0;
         char file_name[MAX_FILENAME_SIZE+1]={0};
         char buf[MAX_CMDBUF_SIZE+1] ={0};
@@ -257,7 +275,7 @@ int main(void)
             {
                 char tmp[2049] ={0};
                 // printf("cat\n");
-                int fd = sfs_open(file_name,0);
+                int fd = sfs_open(file_name);
                 if(fd ==-1) 
                 {
                     printf("不存在该文件\n");
@@ -285,10 +303,21 @@ int main(void)
             case 4:
             {
                 int fd = sfs_create(file_name,0);
-                if(fd ==-1) printf("路径不正确!\n");
+                //返回-1 路径中有目录未创建
+                //返回-2 目标已存在，且类型相同
+                //返回-3 创建失败 空间不够
+                //返回-4 目标存在，且类型不同
+                //返回-5 路径中存在目标为非目录类型
+                // >=0 创建的文件描述符
+                //保证调用时name长度不超过100
+                //目录级数不超过10
+                //同时保证最后一个文件名字长度不应该超过15个字符
+                if(fd ==-1) printf("路径中有目录未创建!\n");
                 else if(fd ==-2) printf("目标已存在!\n");
                 else if(fd ==-3) printf("空间不够!\n");
-                else
+                else if(fd ==-4) printf("目标存在，且类型不同!\n");
+                else if(fd ==-5) printf("路径中存在目标为非目录类型!\n");
+                else 
                 {
                     printf("创建成功!\n");
                 }
@@ -296,6 +325,11 @@ int main(void)
             break;
             case 5:
             {
+                //返回0  删除
+                //返回-1 目标不存在
+                //返回-2 目录不为空
+                //保证name不超过100
+                //保证目录级数不超过10级
                 int fd = sfs_remove(file_name,0);
                 if(fd ==-1) printf("目标不存在!\n");
                 else
@@ -306,7 +340,7 @@ int main(void)
             break;
             case 6:
             {
-                int fd = sfs_open(file_name,0);
+                int fd = sfs_open(file_name);
                 if(fd<0)
                 {
                     printf("没有该文件!\n");
@@ -314,7 +348,7 @@ int main(void)
                 }
                 if(sfs_write(fd,write_buf,bsize)==-1)
                 {
-                    printf("写入失败!\n");
+                    printf("你写入了一个目录!\n");
                 }
                 else
                 {
@@ -328,9 +362,11 @@ int main(void)
             case 8:
             {
                 int fd = sfs_create(file_name,1);
-                if(fd ==-1) printf("路径不正确!\n");
+                if(fd ==-1) printf("路径中有目录未创建!\n");
                 else if(fd ==-2) printf("目标已存在!\n");
                 else if(fd ==-3) printf("空间不够!\n");
+                else if(fd ==-4) printf("目标存在，且类型不同!\n");
+                else if(fd ==-5) printf("路径中存在目标为非目录类型!\n");
                 else
                 {
                     printf("创建成功!\n");
@@ -339,6 +375,11 @@ int main(void)
             break;
             case 9:
             {
+                //返回0  删除
+                //返回-1 目标不存在
+                //返回-2 目录不为空
+                //保证name不超过100
+                //保证目录级数不超过10级
                 int fd = sfs_remove(file_name,1);
                 if(fd ==-1) printf("目录不存在!\n");
                 else if(fd ==-2) printf("目录不为空!\n");
@@ -350,6 +391,12 @@ int main(void)
             break;
             case 10:
             {
+                //  0 成功
+                // -4 链接目标不存在
+                // -1 链接源不存在
+                // -2 原链接已经存在
+                // -3 创建的空间不够
+                // -5 链接源的过程中存在非目录的文件类型
                 int a =sfs_mklink(file_name,write_buf);
                 if(a==-4)
                 {
@@ -358,21 +405,33 @@ int main(void)
                 }
                 else if(a==-2)
                 {
-                    printf("原链接存在!\n");
+                    printf("原链接已经存在!\n");
                 }
                 else if(a==-3)
                 {
-                    printf("创建失败!\n");
+                    printf("创建的空间不够!\n");
                 }
                 else if(a==-1)
                 {
-                    printf("寻找源链接的中间路径不存在!\n");
+                    printf("链接源不存在!\n");
                 }
-
+                else if(a==-5)
+                {
+                    printf("链接源的过程中存在非目录的文件类型\n");
+                }
+                else if(a==0)
+                {
+                    printf("创建成功!\n");
+                }
             }
             break;
             case 11:
             {
+                //返回0  删除
+                //返回-1 目标不存在
+                //返回-2 目录不为空
+                //保证name不超过100
+                //保证目录级数不超过10级
                 if(sfs_remove(file_name,2)==-1)
                 {
                     printf("链接不存在!\n");
