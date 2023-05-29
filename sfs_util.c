@@ -39,20 +39,8 @@ void RootEntry_init(FD_Room * entry)
 	}
 	int root_id=FileDescriptor_allocDir(entry);
 	FileDescriptor* root = GetFileDescriptor(entry,root_id);
-	root->filename[0] ='/';
-	root->filename[1] =0;
-	int cur_id = FileDescriptor_alloclink(entry);
-	FileDescriptor* cur = GetFileDescriptor(entry,cur_id);
-	cur->filename[0] ='.';
-	cur->filename[1] =0;
-	cur->ref_to = root_id;
-	int father_id = FileDescriptor_alloclink(entry);
-	FileDescriptor* father = GetFileDescriptor(entry,father_id);
-	father->filename[0]='.';
-	father->filename[1]='.';
-	father->filename[2]=0;
-	father->ref_to = root_id;
-	root->ref +=2;
+	int cur_id = root_id;
+	int father_id =root_id;
 	root->dir_fds[0] =cur_id;
 	root->dir_fds[1] =father_id;
 }
