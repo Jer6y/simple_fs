@@ -18,8 +18,8 @@ typedef struct FileAccessStatus {       // 文件当前状态
 
 typedef struct FileDescriptor {         // FCB
     uint8_t             type;           // 自增:文件类型 dir or file 或者其他
-    // type: 0-> file  1->dir 2->l  0xff -> 未分配
-    uint16_t             dir_fds[12];    
+    // type: 0-> file  1->dir 2->l  0xff -> 未分配 4-> zombie
+    uint16_t            dir_fds[12];    
     // 如果type 为 dir 那么dir_fds 就是 这个目录包含的其他文件或者目录的描述符地址
     // 这个地址应该是相对偏移量也就是fileID
     uint8_t             ref; 
