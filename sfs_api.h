@@ -16,7 +16,7 @@ void sfs_cd(char *name);
 // file
 int sfs_create(char* name,uint16_t type);
 int sfs_remove(char* name,uint16_t type);
-int sfs_open(char *name,uint16_t type);
+int sfs_open(char *name);
 int sfs_close(int fileID);
 int sfs_write(int fileID, char *buf, int length);
 int sfs_read(int fileID, char *buf, int length);

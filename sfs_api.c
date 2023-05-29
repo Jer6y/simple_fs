@@ -47,21 +47,35 @@ int (*read_sfs[])(int,char*,int) =
 // -1 链接源不存在
 // -2 原链接已经存在
 // -3 创建的空间不够
+// -5 链接源的过程中存在非目录的文件类型
 int sfs_mklink(char * src,char* des)
 {
     int fd_src;
     int fd_des;
-    if((fd_des=sfs_open(des,0))==-1)
+    if((fd_des=sfs_open(des))==-1)
     {
         return -4;
+    }
+    else if(Entry_Root.fds[fd_des].type!=0 && Entry_Root.fds[fd_des].type!=2)
+    {
+        sfs_close(fd_des);
+        return -1;
     }
     if((fd_src =sfs_create(src,2))<0)
     {
         sfs_close(fd_des);
         return fd_src;
     }
-    (Entry_Root.fds[fd_src]).ref_to = fd_des;
-    (Entry_Root.fds[fd_des].ref)++;
+    if(Entry_Root.fds[fd_des].type==0)
+    {
+        (Entry_Root.fds[fd_src]).ref_to = fd_des;
+        (Entry_Root.fds[fd_des].ref)++;
+    }
+    else
+    {
+        (Entry_Root.fds[fd_src]).ref_to =Entry_Root.fds[fd_des].ref_to;
+        (Entry_Root.fds[Entry_Root.fds[fd_des].ref_to].ref)++;
+    }
     sfs_close(fd_des);
     sfs_close(fd_src);
     return 0;
@@ -138,7 +152,8 @@ void split(char* str,char key_word,char (*store)[16],int* size)
         }
     }
     *size = i;
-    assert((*size) <10);
+    if((*size) > 10)
+        panic("目录级数超过10级!");
     return;
 }
 //如果mode ==0,在当前目录下找文件
@@ -148,72 +163,104 @@ void split(char* str,char key_word,char (*store)[16],int* size)
 //如果没有找到 返回-1
 static int find_(FileDescriptor* now,char* name,int mode)
 {
-    assert(now->type==1);
+    if(now->type!=1)
+        panic("想要查找一个非目录类型的文件!");
     for(int i=0;i<12;i++)
     {
-        if((now->dir_fds)[i]!=0xffff)
+        if(i==0 || i==1)
         {
-            switch(Entry_Root.fds[(now->dir_fds)[i]].type)
+            if((Entry_Root.fds[(now->dir_fds)[i]].type)!=1)
             {
-                case 0:
-                if(mode==0 || mode ==3)
-                {   
-                    if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
-                    {
-                        return (now->dir_fds)[i];
-                    }
-                }
-                break;
-                case 1:
-                if(mode ==1 || mode ==3)
+                panic("此目录的第一个和第二个文件不为目录!!!\n");
+            }
+            if(i==0)
+            {
+                if(mode==3 || mode==1)
                 {
-                    if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
-                    {
-                        return (now->dir_fds)[i];
-                    }
+                    if(strcmp(name,".")==0)
+                    return (now->dir_fds)[i];
                 }
-                break;
-                case 2:
-                if(mode==0)
+            }
+            else
+            {
+                if(mode==3 || mode==1)
                 {
-                    if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0 )
-                    {
-                        if(Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==0 \
-                        || Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==4)
-                        return Entry_Root.fds[(now->dir_fds)[i]].ref_to;
-                    }
+                    if(strcmp(name,"..")==0)
+                    return (now->dir_fds)[i];
                 }
-                else if(mode ==1)
+            }
+        }
+        else
+        {
+            if((now->dir_fds)[i]!=0xffff)
+            {
+                switch(Entry_Root.fds[(now->dir_fds)[i]].type)
                 {
-                    if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0 && Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==1)
-                    {
-                        return Entry_Root.fds[(now->dir_fds)[i]].ref_to;
+                    case 0:
+                    if(mode==0 || mode ==3)
+                    {   
+                        if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
+                        {
+                            return (now->dir_fds)[i];
+                        }
                     }
-                }
-                else if(mode==2 || mode ==3)
-                {
-                    if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
+                    break;
+                    case 1:
+                    if(mode ==1 || mode ==3)
                     {
-                        return (now->dir_fds)[i];
+                        if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
+                        {
+                            return (now->dir_fds)[i];
+                        }
                     }
+                    break;
+                    case 2:
+                    // if(mode==0)
+                    // {
+                    //     if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0 )
+                    //     {
+                    //         if(Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==0 \
+                    //         || Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==4)
+                    //         return Entry_Root.fds[(now->dir_fds)[i]].ref_to;
+                    //     }
+                    // }
+                    // else if(mode ==1)
+                    // {
+                    //     if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0 && Entry_Root.fds[Entry_Root.fds[(now->dir_fds)[i]].ref_to].type==1)
+                    //     {
+                    //         return Entry_Root.fds[(now->dir_fds)[i]].ref_to;
+                    //     }
+                    // }
+                    if(mode==2 || mode ==3)
+                    {
+                        if(strcmp(name,Entry_Root.fds[(now->dir_fds)[i]].filename)==0)
+                        {
+                            return (now->dir_fds)[i];
+                        }
+                    }
+                    break;
+                    case 3:
+                    break;
+                    case 4:
+                    break;
+                    default:
+                    panic("当前寻找目录中出现了其他不正常类型!");
+                    break;
                 }
-                break;
-                case 3:
-                break;
-                case 4:
-                break;
-                default:
-                break;
             }
         }
     }
     return -1;
 }
-//返回0  创建成功
-//返回-1 路径中存在有目录未创建
-//返回-2 目标已存在
+//返回-1 路径中有目录未创建
+//返回-2 目标已存在，且类型相同
 //返回-3 创建失败 空间不够
+//返回-4 目标存在，且类型不同
+//返回-5 路径中存在目标为非目录类型
 // >=0 创建的文件描述符
+//保证调用时name长度不超过100
+//目录级数不超过10
+//同时保证最后一个文件名字长度不应该超过15个字符
 int sfs_create(char* name,uint16_t type)
 {
     FileDescriptor* find_s_fd =0;
@@ -222,7 +269,7 @@ int sfs_create(char* name,uint16_t type)
     int size=0;
     int i=0;
     char cp_name[100]={0};
-    strcpy(cp_name,name);
+    strncpy(cp_name,name,100);
     split(cp_name,'/',store,&size);
     if(strcmp(store[0],"/")==0)
     {
@@ -236,13 +283,21 @@ int sfs_create(char* name,uint16_t type)
     }
     for(;i<size-1;i++)
     {
-        int fd = find_(find_s_fd,store[i],1);
+        int fd = find_(find_s_fd,store[i],3);
         if(fd ==-1) return -1;
+        if(Entry_Root.fds[fd].type != 1) return -5;
         find_s_fd = GetFileDescriptor(&Entry_Root,fd);
         father_fd = fd;
     }
-    int fd = find_(find_s_fd,store[size-1],type);
-    if(fd!=-1) return -2;
+    int fd = find_(find_s_fd,store[size-1],3);
+    
+    if(fd!=-1) 
+    {
+        if(Entry_Root.fds[fd].type == type)
+        return -2;
+        else
+        return -4;
+    }
     switch(type)
     {
         case 0:
@@ -301,33 +356,8 @@ int sfs_create(char* name,uint16_t type)
                 FileDescriptor_free(&Entry_Root,fileId);
                 return -3;
             }
-            int cur_id = FileDescriptor_alloclink(&Entry_Root);
-            if(cur_id ==-1)
-            {
-                FileDescriptor_destory(fileDt);
-                FileDescriptor_free(&Entry_Root,fileId);
-                return -3;
-            }
-            FileDescriptor* cur = GetFileDescriptor(&Entry_Root,cur_id);
-            int father_id = FileDescriptor_alloclink(&Entry_Root);
-            if(father_id==-1)
-            {
-                FileDescriptor_destory(cur);
-                FileDescriptor_free(&Entry_Root,cur_id);
-                FileDescriptor_destory(fileDt);
-                FileDescriptor_free(&Entry_Root,fileId);
-                return -3;
-            }
-            FileDescriptor* father = GetFileDescriptor(&Entry_Root,father_id);
-            cur->filename[0] ='.';
-            cur->filename[1] =0;
-            cur->ref_to = fileId;
-            father->filename[0]='.';
-            father->filename[1]='.';
-            father->filename[2]=0;
-            father->ref_to = father_fd;
-            fileDt->ref ++;
-            Entry_Root.fds[father_fd].ref++;
+            int cur_id = fileId;
+            int father_id = father_fd;
             fileDt->dir_fds[0] =cur_id;
             fileDt->dir_fds[1] =father_id;
             return fileId;
@@ -361,7 +391,7 @@ int sfs_create(char* name,uint16_t type)
         }
         break;
         default:
-        assert(1<0);
+        panic("在创建文件时 创建了不该创建的类型");
         break;
     }
 }
@@ -369,6 +399,8 @@ int sfs_create(char* name,uint16_t type)
 //返回0  删除
 //返回-1 目标不存在
 //返回-2 目录不为空
+//保证name不超过100
+//保证目录级数不超过10级
 int sfs_remove(char* name,uint16_t type)
 {
     FileDescriptor* find_s_fd =0;
@@ -436,7 +468,7 @@ int sfs_remove(char* name,uint16_t type)
             int fileID = fd;
             FileDescriptor* fileDt = GetFileDescriptor(&Entry_Root,fileID);
             int is_can_free =1;
-            for(int i=0;i<12;i++)
+            for(int i=2;i<12;i++)
             {
                 if((fileDt->dir_fds)[i] !=0xffff)
                 {
@@ -462,7 +494,7 @@ int sfs_remove(char* name,uint16_t type)
         {
             int fileID = fd;
             FileDescriptor* fileDt = GetFileDescriptor(&Entry_Root,fileID);
-            assert(fileDt->ref_to!=0xffff);
+            assert((fileDt->ref_to!=0xffff)&& (fileDt->ref_to!=0xfffe));
             assert(fileDt->ref ==0);
             Entry_Root.fds[fileDt->ref_to].ref--;
             if(Entry_Root.fds[fileDt->ref_to].ref==0 && Entry_Root.fds[fileDt->ref_to].type==4)
@@ -509,7 +541,7 @@ void sfs_cd(char *name)
     int size=0;
     int i=0;
     char cp_name[100]={0};
-    strcpy(cp_name,name);
+    strncpy(cp_name,name,100);
     split(cp_name,'/',store,&size);
     if(strcmp(store[0],"/")==0)
         find_s_fd = &(Entry_Root.fds[i++]);
@@ -543,7 +575,7 @@ void sfs_cd(char *name)
 }
 //-1 不存在
 //其他 文件描述符
-int sfs_open(char *name,uint16_t type)
+int sfs_open(char *name)
 {
     if(strcmp(name,"/")==0)
     {
@@ -571,8 +603,8 @@ int sfs_open(char *name,uint16_t type)
         }
         find_s_fd = GetFileDescriptor(&Entry_Root,fd);
     }
-    int fd = find_(find_s_fd,store[size-1],type);
-    if(fd!=-1) 
+    int fd = find_(find_s_fd,store[size-1],3);
+    if(fd!=-1)
     {
         Entry_Root.fds[fd].fas.opened=1;
     }
@@ -597,7 +629,9 @@ int write_sfs_link(int fd,char* buf,int length)
     assert(this_file->type==2);
     assert((this_file->ref==0)&&(this_file->ref_to !=0xffff));
     if(Entry_Root.fds[this_file->ref_to].type==1) return -1;
-    return write_sfs_file(this_file->ref_to,buf,length); 
+    Entry_Root.fds[this_file->ref_to].fas.opened =1;
+    int tmp = write_sfs_file(this_file->ref_to,buf,length); 
+    Entry_Root.fds[this_file->ref_to].fas.opened =0;
 }
 //-1失败
 //0 成功
@@ -605,7 +639,6 @@ int write_sfs_file(int fd,char* buf,int length)
 {
     assert(fd>=0 && fd<128);
     FileDescriptor * this_file = &Entry_Root.fds[fd];
-    assert(this_file->type ==0);
     if(this_file->fas.opened ==0 ) return -1;
     int16_t node_index = this_file->fat_index;
 
@@ -689,9 +722,15 @@ int read_sfs_link(int fileID, char *buf, int length)
     FileDescriptor * this_file = &(Entry_Root.fds[fileID]);
     assert(this_file->type==2);
     assert((this_file->ref==0)&&(this_file->ref_to !=0xffff));
-    if(Entry_Root.fds[this_file->ref_to].type==1) return -1;
+    if(Entry_Root.fds[this_file->ref_to].type==1) 
+    {
+        return -1;
+    }
+    Entry_Root.fds[this_file->ref_to].fas.opened=1;
     // printf("%s ",Entry_Root.fds[this_file->ref_to].filename);
-    return read_sfs_file(this_file->ref_to,buf,length); 
+    int tmp =read_sfs_file(this_file->ref_to,buf,length); 
+    Entry_Root.fds[this_file->ref_to].fas.opened=0;
+    return tmp;
 }
 int read_sfs_file(int fileID, char *buf, int length)
 {
@@ -800,8 +839,16 @@ void sfs_ls()
     printf("\n");
     for (i = 0; i < 12; i++)
     {
+        
         if (((cur_dir->dir_fds)[i])!=0xffff)
         {
+            char NAME[16]={0};
+            if(i==0)
+            strcpy(NAME,".");
+            else if(i==1)
+            strcpy(NAME,"..");
+            else
+            strcpy(NAME,Entry_Root.fds[(cur_dir->dir_fds)[i]].filename);
             char type =0;
             switch(Entry_Root.fds[(cur_dir->dir_fds)[i]].type)
             {
@@ -822,26 +869,19 @@ void sfs_ls()
             switch(Entry_Root.fds[(cur_dir->dir_fds)[i]].type)
             {
                 case 0:
-                printf("\e[97m%s\n",Entry_Root.fds[(cur_dir->dir_fds)[i]].filename);
+                printf("\e[97m%s\n",NAME);
                 break;
                 case 1:
-                printf("\e[96m%s\n\e[97m",Entry_Root.fds[(cur_dir->dir_fds)[i]].filename);
+                printf("\e[96m%s\n\e[97m",NAME);
                 break;
                 case 2:
-                printf("\e[92m%s\e[97m\t -> \e[96m%s\e[97m\n",Entry_Root.fds[(cur_dir->dir_fds)[i]].filename,Entry_Root.fds[Entry_Root.fds[(cur_dir->dir_fds)[i]].ref_to].filename);
-
+                printf("\e[92m%s\e[97m\t -> \e[96m%s\e[97m\n",NAME,Entry_Root.fds[Entry_Root.fds[(cur_dir->dir_fds)[i]].ref_to].filename);
                 break;
-    
             }
             
         }
     }
 }
-
-
-
-
-
 
 // static int __sfs_open___(char *name,FileDescriptor *dir)
 // {
