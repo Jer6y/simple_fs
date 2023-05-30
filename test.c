@@ -19,17 +19,17 @@ int t_last = MAX_FZ;
 // 如果指令合法,则操作文件名被解析存放于 file, size是他的大小,max_size是最长的文件名
 // 返回值:
 // -1  -->  非法指令
-//  1  -->  ls
-//  2  -->  cd  
-//  3  -->  cat  
-//  4  -->  touch 
-//  5  -->  rm
-//  6  -->  echo 
-//  7  -->  quit
-//  8  -->  mkdir
-//  9  -->  rmdir
-// 10  -->  mklink
-// 11  -->  rmlink
+//  1  -->  ls  1
+//  2  -->  cd  1
+//  3  -->  cat  1
+//  4  -->  touch 0
+//  5  -->  rm  1
+//  6  -->  echo  1
+//  7  -->  quit 0 
+//  8  -->  mkdir 1
+//  9  -->  rmdir 1
+// 10  -->  mklink 0 
+// 11  -->  rmlink 0
 int analyze_cmd(char *file,size_t* size,int max_size)
 {
     
